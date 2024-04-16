@@ -63,6 +63,7 @@ use std::fmt;
 
 use self::Error::*;
 
+mod api;
 mod capture;
 mod codec;
 mod device;
