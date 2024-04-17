@@ -498,7 +498,7 @@ pub struct Api {
     #[cfg(windows)]
     pub live_dump_ended: ffi::PcapLiveDumpEnded,
     #[cfg(windows)]
-    pub start_oem: ffi::PcapStartOem,
+    pub start_oem: Option<ffi::PcapStartOem>,
     #[cfg(windows)]
     pub get_airpcap_handle: ffi::PcapGetAirpcapHandle,
     _lib: libloading::Library,
@@ -996,10 +996,7 @@ impl Api {
                     .map(|f| *f)
                     .expect("pcap_live_dump_ended not loaded"),
                 #[cfg(windows)]
-                start_oem: lib
-                    .get(b"pcap_start_oem")
-                    .map(|f| *f)
-                    .expect("pcap_start_oem not loaded"),
+                start_oem: lib.get(b"pcap_start_oem").map(|f| *f).ok(),
                 #[cfg(windows)]
                 get_airpcap_handle: lib
                     .get(b"pcap_get_airpcap_handle")
@@ -1750,7 +1747,7 @@ impl Api {
     #[cfg(windows)]
     #[inline]
     pub unsafe fn start_oem(&self, arg1: *mut c_char, arg2: c_int) -> c_int {
-        (self.start_oem)(arg1, arg2)
+        self.start_oem.expect("pcap_start_oem not loaded")(arg1, arg2)
     }
 
     #[cfg(windows)]
