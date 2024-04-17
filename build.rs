@@ -10,6 +10,7 @@ struct Version {
     micro: usize,
 }
 
+#[allow(dead_code)]
 impl Version {
     const LOWEST_SUPPORTED: Self = Self {
         major: 1,

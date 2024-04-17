@@ -267,7 +267,7 @@ impl Address {
             return None;
         }
 
-        match (*ptr).sa_family as u16 {
+        match (*ptr).sa_family {
             WinSock::AF_INET => {
                 let ptr: *const WinSock::SOCKADDR_IN = std::mem::transmute(ptr);
                 let addr: [u8; 4] = ((*ptr).sin_addr.S_un.S_addr).to_ne_bytes();
