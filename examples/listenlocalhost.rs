@@ -1,7 +1,9 @@
 fn main() {
-    // listen on the device named "any", which is only available on Linux. This is only for
-    // demonstration purposes.
-    let mut cap = pcap::Capture::from_device("any")
+    #[cfg(windows)]
+    let name = "\\Device\\NPF_Loopback";
+    #[cfg(not(windows))]
+    let name = "any";
+    let mut cap = pcap::Capture::from_device(name)
         .unwrap()
         .immediate_mode(true)
         .open()
