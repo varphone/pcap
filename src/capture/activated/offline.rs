@@ -8,7 +8,7 @@ use crate::{
     raw, Error,
 };
 
-#[cfg(libpcap_1_5_0)]
+#[cfg(libpcap_1_5)]
 use crate::capture::Precision;
 
 #[cfg(not(windows))]
@@ -24,7 +24,7 @@ impl Capture<Offline> {
 
     /// Opens an offline capture handle from a pcap dump file, given a path.
     /// Takes an additional precision argument specifying the time stamp precision desired.
-    #[cfg(libpcap_1_5_0)]
+    #[cfg(libpcap_1_5)]
     pub fn from_file_with_precision<P: AsRef<Path>>(
         path: P,
         precision: Precision,
@@ -51,7 +51,7 @@ impl Capture<Offline> {
     /// # Safety
     ///
     /// Unsafe, because the returned Capture assumes it is the sole owner of the file descriptor.
-    #[cfg(all(not(windows), libpcap_1_5_0))]
+    #[cfg(all(not(windows), libpcap_1_5))]
     pub unsafe fn from_raw_fd_with_precision(
         fd: RawFd,
         precision: Precision,
@@ -81,7 +81,7 @@ impl Capture<Offline> {
 
 #[cfg(test)]
 mod tests {
-    #[cfg(libpcap_1_5_0)]
+    #[cfg(libpcap_1_5)]
     use mockall::predicate;
 
     use crate::{
@@ -111,7 +111,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(libpcap_1_5_0)]
+    #[cfg(libpcap_1_5)]
     fn test_from_file_with_precision() {
         let _m = RAWMTX.lock();
 

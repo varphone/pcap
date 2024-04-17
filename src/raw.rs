@@ -2,7 +2,9 @@
 #![allow(dead_code)]
 #![allow(non_camel_case_types)]
 
-use libc::{c_char, c_int, c_uchar, c_uint, c_ushort, sockaddr, timeval, FILE};
+use libc::{
+    c_char, c_int, c_uchar, c_uint, c_ushort, c_void, intptr_t, size_t, sockaddr, timeval, FILE,
+};
 
 // #[cfg(test)]
 // use mockall::automock;
@@ -16,6 +18,8 @@ pub const PCAP_IF_CONNECTION_STATUS_UNKNOWN: u32 = 0x00000000;
 pub const PCAP_IF_CONNECTION_STATUS_CONNECTED: u32 = 0x00000010;
 pub const PCAP_IF_CONNECTION_STATUS_DISCONNECTED: u32 = 0x00000020;
 pub const PCAP_IF_CONNECTION_STATUS_NOT_APPLICABLE: u32 = 0x00000030;
+
+pub type bpf_u_int32 = c_uint;
 
 #[repr(C)]
 #[derive(Copy, Clone)]
@@ -100,6 +104,21 @@ pub struct pcap_send_queue {
     pub buffer: *mut c_char,
 }
 
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct pcap_rmtauth {
+    pub r#type: c_int,
+    pub username: *mut c_char,
+    pub password: *mut c_char,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct pcap_samp {
+    pub method: c_int,
+    pub value: c_int,
+}
+
 // This is not Option<fn>, pcap functions do not check if the handler is null so it is wrong to
 // pass them Option::<fn>::None.
 pub type pcap_handler =
@@ -133,20 +152,40 @@ pub mod ffi {
     pub unsafe fn pcap_activate(arg1: *mut pcap_t) -> c_int {
         Api::get().activate(arg1)
     }
-    // pub unsafe fn pcap_open_live(arg1: *const c_char, arg2: c_int, arg3: c_int, arg4: c_int,
-    //                       arg5: *mut c_char) -> *mut pcap_t;
+    pub unsafe fn pcap_open_live(
+        arg1: *const c_char,
+        arg2: c_int,
+        arg3: c_int,
+        arg4: c_int,
+        arg5: *mut c_char,
+    ) -> *mut pcap_t {
+        Api::get().open_live(arg1, arg2, arg3, arg4, arg5)
+    }
     pub unsafe fn pcap_open_dead(arg1: c_int, arg2: c_int) -> *mut pcap_t {
         Api::get().open_dead(arg1, arg2)
     }
     pub unsafe fn pcap_open_offline(arg1: *const c_char, arg2: *mut c_char) -> *mut pcap_t {
         Api::get().open_offline(arg1, arg2)
     }
+
+    #[cfg(not(windows))]
     pub unsafe fn pcap_fopen_offline(arg1: *mut FILE, arg2: *mut c_char) -> *mut pcap_t {
         Api::get().fopen_offline(arg1, arg2)
     }
+
+    #[cfg(all(windows, msvc))]
+    #[link_name = "msvcrt::_get_osfhandle"]
+    unsafe extern "C" fn _get_osfhandle(fd: c_int) -> intptr_t;
+
+    #[cfg(all(windows, msvc))]
+    pub unsafe fn pcap_fopen_offline(arg1: *mut FILE, arg2: *mut c_char) -> *mut pcap_t {
+        Api::get().hopen_offline(_get_osfhandle(libc::fileno(arg1)), arg2)
+    }
+
     pub unsafe fn pcap_close(arg1: *mut pcap_t) {
         Api::get().close(arg1)
     }
+
     pub unsafe fn pcap_loop(
         arg1: *mut pcap_t,
         arg2: c_int,
@@ -155,6 +194,7 @@ pub mod ffi {
     ) -> c_int {
         Api::get().r#loop(arg1, arg2, arg3, arg4)
     }
+
     // pub unsafe fn pcap_dispatch(arg1: *mut pcap_t, arg2: c_int, arg3: pcap_handler,
     //                      arg4: *mut c_uchar)-> c_int;
     // pub unsafe fn pcap_next(arg1: *mut pcap_t, arg2: *mut pcap_pkthdr) -> *const c_uchar;
@@ -165,9 +205,11 @@ pub mod ffi {
     ) -> c_int {
         Api::get().next_ex(arg1, arg2, arg3)
     }
+
     pub unsafe fn pcap_breakloop(arg1: *mut pcap_t) {
         Api::get().breakloop(arg1)
     }
+
     pub unsafe fn pcap_stats(arg1: *mut pcap_t, arg2: *mut pcap_stat) -> c_int {
         Api::get().stats(arg1, arg2)
     }
@@ -248,107 +290,276 @@ pub mod ffi {
     pub unsafe fn pcap_dump_open(arg1: *mut pcap_t, arg2: *const c_char) -> *mut pcap_dumper_t {
         Api::get().dump_open(arg1, arg2)
     }
+
+    #[cfg(not(windows))]
     pub unsafe fn pcap_dump_fopen(arg1: *mut pcap_t, fp: *mut FILE) -> *mut pcap_dumper_t {
         Api::get().dump_fopen(arg1, fp)
     }
+
+    #[cfg(all(windows, msvc))]
+    pub unsafe fn pcap_dump_fopen(arg1: *mut pcap_t, fp: *mut FILE) -> *mut pcap_dumper_t {
+        Api::get().dump_hopen(arg1, _get_osfhandle(libc::fileno(fp)))
+    }
+
     // pub unsafe fn pcap_dump_file(arg1: *mut pcap_dumper_t) -> *mut FILE;
     // pub unsafe fn pcap_dump_ftell(arg1: *mut pcap_dumper_t) -> c_long;
+
     pub unsafe fn pcap_dump_flush(arg1: *mut pcap_dumper_t) -> c_int {
         Api::get().dump_flush(arg1)
     }
+
     pub unsafe fn pcap_dump_close(arg1: *mut pcap_dumper_t) {
         Api::get().dump_close(arg1)
     }
+
     pub unsafe fn pcap_dump(arg1: *mut c_uchar, arg2: *const pcap_pkthdr, arg3: *const c_uchar) {
         Api::get().dump(arg1, arg2, arg3)
     }
+
     pub unsafe fn pcap_findalldevs(arg1: *mut *mut pcap_if_t, arg2: *mut c_char) -> c_int {
         Api::get().findalldevs(arg1, arg2)
     }
+
     pub unsafe fn pcap_freealldevs(arg1: *mut pcap_if_t) {
         Api::get().freealldevs(arg1)
     }
-    // pub unsafe fn pcap_lib_version() -> *const c_char;
-    // pub unsafe fn bpf_image(arg1: *const bpf_insn, arg2: c_int) -> *mut c_char;
-    // pub unsafe fn bpf_dump(arg1: *const bpf_program, arg2: c_int);
+
+    pub unsafe fn pcap_lib_version() -> *const c_char {
+        Api::get().lib_version()
+    }
+
+    pub unsafe fn bpf_image(arg1: *const bpf_insn, arg2: c_int) -> *mut c_char {
+        Api::get().bpf_image(arg1, arg2)
+    }
+
+    pub unsafe fn bpf_dump(arg1: *const bpf_program, arg2: c_int) {
+        Api::get().bpf_dump(arg1, arg2)
+    }
+
+    #[cfg(not(windows))]
     pub unsafe fn pcap_get_selectable_fd(arg1: *mut pcap_t) -> c_int {
         Api::get().get_selectable_fd(arg1)
     }
 
-    #[cfg(libpcap_1_2_1)]
-    extern "C" {
-        // pub unsafe fn pcap_free_tstamp_types(arg1: *mut c_int) -> ();
-        // pub unsafe fn pcap_list_tstamp_types(arg1: *mut pcap_t, arg2: *mut *mut c_int) -> c_int;
-        // pub unsafe fn pcap_tstamp_type_name_to_val(arg1: *const c_char) -> c_int;
-        // pub unsafe fn pcap_tstamp_type_val_to_description(arg1: c_int) -> *const c_char;
-        // pub unsafe fn pcap_tstamp_type_val_to_name(arg1: c_int) -> *const c_char;
-        pub unsafe fn pcap_set_tstamp_type(arg1: *mut pcap_t, arg2: c_int) -> c_int {
-            0
-        }
+    #[cfg(libpcap_1_2)]
+    pub unsafe fn pcap_free_tstamp_types(arg1: *mut c_int) {
+        Api::get().free_tstamp_types(arg1)
     }
 
-    #[cfg(libpcap_1_5_0)]
-    extern "C" {
-        pub unsafe fn pcap_fopen_offline_with_tstamp_precision(
-            arg1: *mut FILE,
-            arg2: c_uint,
-            arg3: *mut c_char,
-        ) -> *mut pcap_t {
-            std::ptr::null_mut()
-        }
-        // pub unsafe fn pcap_get_tstamp_precision(arg1: *mut pcap_t) -> c_int;
-        pub unsafe fn pcap_open_dead_with_tstamp_precision(
-            arg1: c_int,
-            arg2: c_int,
-            arg3: c_uint,
-        ) -> *mut pcap_t {
-            std::ptr::null_mut()
-        }
-        pub unsafe fn pcap_open_offline_with_tstamp_precision(
-            arg1: *const c_char,
-            arg2: c_uint,
-            arg3: *mut c_char,
-        ) -> *mut pcap_t {
-            std::ptr::null_mut()
-        }
-        pub unsafe fn pcap_set_immediate_mode(arg1: *mut pcap_t, arg2: c_int) -> c_int {
-            0
-        }
-        pub unsafe fn pcap_set_tstamp_precision(arg1: *mut pcap_t, arg2: c_int) -> c_int {
-            0
-        }
+    #[cfg(libpcap_1_2)]
+    pub unsafe fn pcap_list_tstamp_types(arg1: *mut pcap_t, arg2: *mut *mut c_int) -> c_int {
+        Api::get().list_tstamp_types(arg1, arg2)
     }
 
-    #[cfg(libpcap_1_7_2)]
-    extern "C" {
-        pub unsafe fn pcap_dump_open_append(
-            arg1: *mut pcap_t,
-            arg2: *const c_char,
-        ) -> *mut pcap_dumper_t {
-            std::ptr::null_mut()
-        }
+    #[cfg(libpcap_1_2)]
+    pub unsafe fn pcap_tstamp_type_name_to_val(arg1: *const c_char) -> c_int {
+        Api::get().tstamp_type_name_to_val(arg1)
     }
 
-    #[cfg(libpcap_1_9_0)]
-    extern "C" {
-        // pcap_bufsize
-        // pcap_createsrcstr
-        // pcap_dump_ftell64
-        // pcap_findalldevs_ex
-        // pcap_get_required_select_timeout
-        // pcap_open
-        // pcap_parsesrcstr
-        // pcap_remoteact_accept
-        // pcap_remoteact_cleanup
-        // pcap_remoteact_close
-        // pcap_remoteact_list
-        // pcap_set_protocol_linux
-        // pcap_setsampling
+    #[cfg(libpcap_1_2)]
+    pub unsafe fn pcap_tstamp_type_val_to_description(arg1: c_int) -> *const c_char {
+        Api::get().tstamp_type_val_to_description(arg1)
     }
 
-    #[cfg(libpcap_1_9_1)]
-    extern "C" {
-        // pcap_datalink_val_to_description_or_dlt
+    #[cfg(libpcap_1_2)]
+    pub unsafe fn pcap_tstamp_type_val_to_name(arg1: c_int) -> *const c_char {
+        Api::get().tstamp_type_val_to_name(arg1)
+    }
+
+    #[cfg(libpcap_1_2)]
+    pub unsafe fn pcap_set_tstamp_type(arg1: *mut pcap_t, arg2: c_int) -> c_int {
+        Api::get().set_tstamp_type(arg1, arg2)
+    }
+
+    #[cfg(all(not(windows), libpcap_1_5))]
+    pub unsafe fn pcap_fopen_offline_with_tstamp_precision(
+        arg1: *mut FILE,
+        arg2: c_uint,
+        arg3: *mut c_char,
+    ) -> *mut pcap_t {
+        Api::get().fopen_offline_with_tstamp_precision(arg1, arg2, arg3)
+    }
+
+    #[cfg(libpcap_1_5)]
+    pub unsafe fn pcap_get_tstamp_precision(arg1: *mut pcap_t) -> c_int {
+        Api::get().get_tstamp_precision(arg1)
+    }
+
+    #[cfg(libpcap_1_5)]
+    pub unsafe fn pcap_open_dead_with_tstamp_precision(
+        arg1: c_int,
+        arg2: c_int,
+        arg3: c_uint,
+    ) -> *mut pcap_t {
+        Api::get().open_dead_with_tstamp_precision(arg1, arg2, arg3)
+    }
+
+    #[cfg(libpcap_1_5)]
+    pub unsafe fn pcap_open_offline_with_tstamp_precision(
+        arg1: *const c_char,
+        arg2: c_uint,
+        arg3: *mut c_char,
+    ) -> *mut pcap_t {
+        Api::get().open_offline_with_tstamp_precision(arg1, arg2, arg3)
+    }
+
+    #[cfg(libpcap_1_5)]
+    pub unsafe fn pcap_set_immediate_mode(arg1: *mut pcap_t, arg2: c_int) -> c_int {
+        Api::get().set_immediate_mode(arg1, arg2)
+    }
+
+    #[cfg(libpcap_1_5)]
+    pub unsafe fn pcap_set_tstamp_precision(arg1: *mut pcap_t, arg2: c_int) -> c_int {
+        Api::get().set_tstamp_precision(arg1, arg2)
+    }
+
+    #[cfg(libpcap_1_7)]
+    pub unsafe fn pcap_dump_open_append(
+        arg1: *mut pcap_t,
+        arg2: *const c_char,
+    ) -> *mut pcap_dumper_t {
+        Api::get().dump_open_append(arg1, arg2)
+    }
+
+    #[cfg(libpcap_1_8)]
+    pub unsafe fn pcap_oid_get_request(
+        arg1: *mut pcap_t,
+        arg2: bpf_u_int32,
+        arg3: *mut c_void,
+        arg4: *mut size_t,
+    ) -> c_int {
+        Api::get().oid_get_request(arg1, arg2, arg3, arg4)
+    }
+
+    #[cfg(libpcap_1_8)]
+    pub unsafe fn pcap_oid_set_request(
+        arg1: *mut pcap_t,
+        arg2: bpf_u_int32,
+        arg3: *const c_void,
+        arg4: *mut size_t,
+    ) -> c_int {
+        Api::get().oid_set_request(arg1, arg2, arg3, arg4)
+    }
+
+    #[cfg(libpcap_1_9)]
+    pub unsafe fn pcap_bufsize(arg1: *mut pcap_t) -> c_int {
+        Api::get().bufsize(arg1)
+    }
+
+    #[cfg(libpcap_1_9)]
+    pub unsafe fn pcap_createsrcstr(
+        arg1: *mut c_char,
+        arg2: c_int,
+        arg3: *const c_char,
+        arg4: *const c_char,
+        arg5: *const c_char,
+        arg6: *mut c_char,
+    ) -> c_int {
+        Api::get().createsrcstr(arg1, arg2, arg3, arg4, arg5, arg6)
+    }
+
+    #[cfg(libpcap_1_9)]
+    pub unsafe fn pcap_dump_ftell64(arg1: *mut pcap_dumper_t) -> i64 {
+        Api::get().dump_ftell64(arg1)
+    }
+
+    #[cfg(libpcap_1_9)]
+    pub unsafe fn pcap_findalldevs_ex(
+        arg1: *const c_char,
+        arg2: *mut pcap_rmtauth,
+        arg3: *mut *mut pcap_if_t,
+        arg4: *mut c_char,
+    ) -> c_int {
+        Api::get().findalldevs_ex(arg1, arg2, arg3, arg4)
+    }
+
+    #[cfg(all(libpcap_1_9, not(windows)))]
+    pub unsafe fn pcap_get_required_select_timeout(arg1: *mut pcap_t, arg2: *mut timeval) -> c_int {
+        Api::get().get_required_select_timeout(arg1, arg2)
+    }
+
+    #[cfg(libpcap_1_9)]
+    pub unsafe fn pcap_open(
+        arg1: *const c_char,
+        arg2: c_int,
+        arg3: c_int,
+        arg4: c_int,
+        arg5: *mut pcap_rmtauth,
+        arg6: *mut c_char,
+    ) -> *mut pcap_t {
+        Api::get().open(arg1, arg2, arg3, arg4, arg5, arg6)
+    }
+
+    #[cfg(libpcap_1_9)]
+    pub unsafe fn pcap_parsesrcstr(
+        arg1: *const c_char,
+        arg2: *mut c_int,
+        arg3: *mut c_char,
+        arg4: *mut c_char,
+        arg5: *mut c_char,
+        arg6: *mut c_char,
+    ) -> c_int {
+        Api::get().parsesrcstr(arg1, arg2, arg3, arg4, arg5, arg6)
+    }
+
+    #[cfg(libpcap_1_9)]
+    pub unsafe fn pcap_remoteact_accept(
+        arg1: *const c_char,
+        arg2: *const c_char,
+        arg3: *const c_char,
+        arg4: *mut c_char,
+        arg5: *mut pcap_rmtauth,
+        arg6: *mut c_char,
+    ) -> c_int {
+        Api::get().remoteact_accept(arg1, arg2, arg3, arg4, arg5, arg6)
+    }
+
+    #[cfg(libpcap_1_9)]
+    pub unsafe fn pcap_remoteact_cleanup() {
+        Api::get().remoteact_cleanup()
+    }
+
+    #[cfg(libpcap_1_9)]
+    pub unsafe fn pcap_remoteact_close(arg1: *const c_char, arg2: *mut c_char) -> c_int {
+        Api::get().remoteact_close(arg1, arg2)
+    }
+
+    #[cfg(libpcap_1_9)]
+    pub unsafe fn pcap_remoteact_list(
+        arg1: *mut c_char,
+        arg2: c_char,
+        arg3: c_int,
+        arg4: *mut c_char,
+    ) -> c_int {
+        Api::get().remoteact_list(arg1, arg2, arg3, arg4)
+    }
+
+    #[cfg(all(libpcap_1_9, not(windows)))]
+    pub unsafe fn pcap_set_protocol_linux(arg1: *mut pcap_t, arg2: c_int) -> c_int {
+        Api::get().set_protocol_linux(arg1, arg2)
+    }
+
+    #[cfg(libpcap_1_9)]
+    pub unsafe fn pcap_setsampling(arg1: *mut pcap_t) -> *mut pcap_samp {
+        Api::get().setsampling(arg1)
+    }
+
+    #[cfg(libpcap_1_10)]
+    pub unsafe fn pcap_remoteact_accept_ex(
+        arg1: *const c_char,
+        arg2: *const c_char,
+        arg3: *const c_char,
+        arg4: *mut c_char,
+        arg5: *mut pcap_rmtauth,
+        arg6: c_int,
+        arg7: *mut c_char,
+    ) -> c_int {
+        Api::get().remoteact_accept_ex(arg1, arg2, arg3, arg4, arg5, arg6, arg7)
+    }
+
+    #[cfg(libpcap_1_10)]
+    pub unsafe fn pcap_datalink_val_to_description_or_dlt(arg1: c_int) -> *const c_char {
+        Api::get().datalink_val_to_description_or_dlt(arg1)
     }
 }
 
@@ -375,20 +586,30 @@ pub mod ffi_windows {
 
     pub const WINPCAP_MINTOCOPY_DEFAULT: c_int = 16000;
 
-    // #[link(name = "wpcap")]
-    // extern "C" {
+    pub unsafe fn pcap_setbuff(arg1: *mut pcap_t, arg2: c_int) -> c_int {
+        Api::get().setbuff(arg1, arg2)
+    }
+
+    pub unsafe fn pcap_setmode(arg1: *mut pcap_t, arg2: c_int) -> c_int {
+        Api::get().setmode(arg1, arg2)
+    }
+
     pub unsafe fn pcap_setmintocopy(arg1: *mut pcap_t, arg2: c_int) -> c_int {
         Api::get().setmintocopy(arg1, arg2)
     }
+
     pub unsafe fn pcap_getevent(p: *mut pcap_t) -> HANDLE {
         Api::get().getevent(p)
     }
+
     pub unsafe fn pcap_sendqueue_alloc(memsize: c_uint) -> *mut pcap_send_queue {
         Api::get().sendqueue_alloc(memsize)
     }
+
     pub unsafe fn pcap_sendqueue_destroy(queue: *mut pcap_send_queue) {
         Api::get().sendqueue_destroy(queue)
     }
+
     pub unsafe fn pcap_sendqueue_queue(
         queue: *mut pcap_send_queue,
         pkt_header: *const pcap_pkthdr,
@@ -396,6 +617,7 @@ pub mod ffi_windows {
     ) -> c_int {
         Api::get().sendqueue_queue(queue, pkt_header, pkt_data)
     }
+
     pub unsafe fn pcap_sendqueue_transmit(
         p: *mut pcap_t,
         queue: *mut pcap_send_queue,
@@ -403,7 +625,6 @@ pub mod ffi_windows {
     ) -> c_uint {
         Api::get().sendqueue_transmit(p, queue, sync)
     }
-    // }
 }
 
 // The conventional solution is to use `mockall_double`. However, automock's requirement for an

@@ -127,7 +127,7 @@ fn test_raw_fd_api() {
         unsafe { Capture::from_raw_fd(-999) }.err().unwrap(),
         Error::InvalidRawFd
     );
-    #[cfg(libpcap_1_5_0)]
+    #[cfg(libpcap_1_5)]
     {
         assert_eq!(
             unsafe { Capture::from_raw_fd_with_precision(-999, Precision::Micro) }
@@ -173,12 +173,12 @@ fn test_raw_fd_api() {
     // Join thread.
     pipe_thread.join().unwrap();
 
-    #[cfg(libpcap_1_5_0)]
+    #[cfg(libpcap_1_5)]
     unsafe fn from_raw_fd_with_precision(fd: RawFd, precision: Precision) -> Capture<Offline> {
         Capture::from_raw_fd_with_precision(fd, precision).unwrap()
     }
 
-    #[cfg(not(libpcap_1_5_0))]
+    #[cfg(not(libpcap_1_5))]
     unsafe fn from_raw_fd_with_precision(fd: RawFd, _: Precision) -> Capture<Offline> {
         Capture::from_raw_fd(fd).unwrap()
     }

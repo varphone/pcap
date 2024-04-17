@@ -12,6 +12,7 @@ use crate::{
 
 bitflags! {
     /// Network device flags.
+    #[derive(Copy, Clone, Debug)]
     pub struct IfFlags: u32 {
         /// Set if the device is a loopback interface
         const LOOPBACK = raw::PCAP_IF_LOOPBACK;

@@ -84,6 +84,34 @@ Use the `capture-stream` feature to enable support for streamed packet captures.
 pcap = { version = "1", features = ["capture-stream"] }
 ```
 
+### `pcap_1_0`
+
+Use the `pcap_1_0` feature to enable support for libpcap 1.0 API.
+
+### `pcap_1_2`
+
+Use the `pcap_1_2` feature to enable support for libpcap 1.2 API.
+
+### `pcap_1_5`
+
+Use the `pcap_1_5` feature to enable support for libpcap 1.5 API.
+
+### `pcap_1_7`
+
+Use the `pcap_1_7` feature to enable support for libpcap 1.7 API.
+
+### `pcap_1_8`
+
+Use the `pcap_1_8` feature to enable support for libpcap 1.8 API.
+
+### `pcap_1_9`
+
+Use the `pcap_1_9` feature to enable support for libpcap 1.9 API.
+
+### `pcap_1_10`
+
+Use the `pcap_1_10` feature to enable support for libpcap 1.10 API.
+
 ## Unstable Features
 
 Use at your own risk, we do not consider this our public API yet.

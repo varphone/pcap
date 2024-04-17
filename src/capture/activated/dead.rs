@@ -6,7 +6,7 @@ use crate::{
     raw, Error,
 };
 
-#[cfg(libpcap_1_5_0)]
+#[cfg(libpcap_1_5)]
 use crate::capture::Precision;
 
 impl Capture<Dead> {
@@ -19,7 +19,7 @@ impl Capture<Dead> {
     }
 
     /// Creates a "fake" capture handle for the given link type and timestamp precision.
-    #[cfg(libpcap_1_5_0)]
+    #[cfg(libpcap_1_5)]
     pub fn dead_with_precision(
         linktype: Linktype,
         precision: Precision,
@@ -35,7 +35,7 @@ impl Capture<Dead> {
 
 #[cfg(test)]
 mod tests {
-    #[cfg(libpcap_1_5_0)]
+    #[cfg(libpcap_1_5)]
     use mockall::predicate;
 
     use crate::raw::testmod::{as_pcap_t, RAWMTX};
@@ -62,7 +62,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(libpcap_1_5_0)]
+    #[cfg(libpcap_1_5)]
     fn test_dead_with_precision() {
         let _m = RAWMTX.lock();
 

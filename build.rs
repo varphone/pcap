@@ -27,29 +27,21 @@ impl Version {
 
     fn list() -> Vec<Version> {
         vec![
+            Version::new(1, 0, 0),
             Version::new(1, 2, 1),
             Version::new(1, 5, 0),
             Version::new(1, 7, 2),
             Version::new(1, 9, 0),
             Version::new(1, 9, 1),
+            Version::new(1, 10, 0),
         ]
     }
 
     fn max() -> Version {
-        #[cfg(not(windows))]
-        {
-            Version::new(1, 9, 1)
-        }
-        #[cfg(windows)]
-        {
-            Version::new(1, 0, 0)
-        }
+        Version::new(1, 10, 0)
     }
 
-    fn docs_rs() -> Version {
-        Version::new(2, 0, 0)
-    }
-
+    #[allow(dead_code)]
     fn parse(s: &str) -> Result<Version, Box<dyn std::error::Error>> {
         let err = format!("invalid pcap lib version: {}", s);
 
@@ -79,21 +71,46 @@ impl std::fmt::Display for Version {
     }
 }
 
+#[cfg(windows)]
+fn add_system_npcap_paths() {
+    use std::os::windows::ffi::{OsStrExt, OsStringExt};
+    use windows_sys::Win32::Foundation::MAX_PATH;
+    use windows_sys::Win32::System::LibraryLoader::SetDllDirectoryW;
+    use windows_sys::Win32::System::SystemInformation::GetSystemDirectoryW;
+
+    unsafe {
+        let mut buffer = [0u16; MAX_PATH as usize];
+        let len = GetSystemDirectoryW(buffer.as_mut_ptr(), buffer.len() as u32);
+        let path = std::ffi::OsString::from_wide(&buffer[..len as usize]);
+        let path = path.to_string_lossy();
+        let npcap_path = format!("{}\\Npcap", path);
+        let npcap_path = std::ffi::OsStr::new(&npcap_path);
+        let mut npcap_path = npcap_path.encode_wide().collect::<Vec<_>>();
+        npcap_path.push(0);
+        SetDllDirectoryW(npcap_path.as_ptr());
+    }
+}
+
+#[cfg(windows)]
+fn find_system_npcap() -> Result<PathBuf, Box<dyn std::error::Error>> {
+    let windir = env::var("WINDIR")?;
+    let npcap = PathBuf::from(windir).join("System32").join("Npcap");
+    let wpcap_dll = npcap.join("wpcap.dll");
+    if wpcap_dll.exists() {
+        add_system_npcap_paths();
+        Ok(wpcap_dll)
+    } else {
+        Err("npcap not found".into())
+    }
+}
+
 fn get_libpcap_version(libdirpath: Option<PathBuf>) -> Result<Version, Box<dyn std::error::Error>> {
-    if std::env::var("DOCS_RS").is_ok() {
-        return Ok(Version::docs_rs());
-    }
-
-    if let Ok(libver) = env::var("LIBPCAP_VER") {
-        return Version::parse(&libver);
-    }
-
     #[cfg(all(unix, not(target_os = "macos")))]
     let mut libfile = PathBuf::from("libpcap.so");
     #[cfg(target_os = "macos")]
     let mut libfile = PathBuf::from("libpcap.dylib");
     #[cfg(windows)]
-    let mut libfile = PathBuf::from("wpcap.dll");
+    let mut libfile = find_system_npcap()?;
 
     if let Some(libdir) = libdirpath {
         libfile = libdir.join(libfile);
@@ -147,49 +164,64 @@ fn get_libpcap_version(libdirpath: Option<PathBuf>) -> Result<Version, Box<dyn s
     }
 }
 
+#[cfg(any(
+    feature = "pcap_1_0",
+    feature = "pcap_1_2",
+    feature = "pcap_1_5",
+    feature = "pcap_1_7",
+    feature = "pcap_1_8",
+    feature = "pcap_1_9",
+    feature = "pcap_1_10"
+))]
+fn emit_cfg_flags(_version: Version) {
+    #[cfg(feature = "pcap_1_0")]
+    println!("cargo:rustc-cfg=libpcap_1_0");
+
+    #[cfg(feature = "pcap_1_2")]
+    println!("cargo:rustc-cfg=libpcap_1_2");
+
+    #[cfg(feature = "pcap_1_5")]
+    println!("cargo:rustc-cfg=libpcap_1_5");
+
+    #[cfg(feature = "pcap_1_7")]
+    println!("cargo:rustc-cfg=libpcap_1_7");
+
+    #[cfg(feature = "pcap_1_8")]
+    println!("cargo:rustc-cfg=libpcap_1_8");
+
+    #[cfg(feature = "pcap_1_9")]
+    println!("cargo:rustc-cfg=libpcap_1_9");
+
+    #[cfg(feature = "pcap_1_10")]
+    println!("cargo:rustc-cfg=libpcap_1_10");
+}
+
+#[cfg(not(any(
+    feature = "pcap_1_0",
+    feature = "pcap_1_2",
+    feature = "pcap_1_5",
+    feature = "pcap_1_7",
+    feature = "pcap_1_8",
+    feature = "pcap_1_9",
+    feature = "pcap_1_10"
+)))]
 fn emit_cfg_flags(version: Version) {
     assert!(
         version >= Version::LOWEST_SUPPORTED,
         "required pcap lib version: >=1.0.0"
     );
 
+    println!("cargo:warning=libpcap version: {}", version);
+
     for v in Version::list().iter().filter(|&v| v <= &version) {
-        println!(
-            "cargo:rustc-cfg=libpcap_{}_{}_{}",
-            v.major, v.minor, v.micro
-        );
+        println!("cargo:rustc-cfg=libpcap_{}_{}", v.major, v.minor);
     }
 }
 
 fn main() {
-    println!("cargo:rerun-if-env-changed=LIBPCAP_LIBDIR");
-    println!("cargo:rerun-if-env-changed=LIBPCAP_VER");
-
-    // If user explicitly set LIBPCAP_LIBDIR, honour their wishes. This keeps
-    // existing build scripts running. If it's not set, try pkg-config. If
-    // that's not set, try last ditch effort to build even though library wasn't
-    // explicitly given.
-    let version = if let Ok(libdir) = env::var("LIBPCAP_LIBDIR") {
-        println!("cargo:rustc-link-search=native={}", libdir);
-        get_libpcap_version(Some(PathBuf::from(&libdir))).unwrap()
-    } else if let Ok(library) = from_pkg_config() {
-        Version::parse(&library.version).unwrap()
+    if let Ok(version) = get_libpcap_version(None) {
+        emit_cfg_flags(version);
     } else {
-        get_libpcap_version(None).unwrap()
-    };
-
-    emit_cfg_flags(version);
-}
-
-fn from_pkg_config() -> Result<pkg_config::Library, pkg_config::Error> {
-    let mut config = pkg_config::Config::new();
-    // If the user has went out of their way to specify LIBPCAP_VER (even though
-    // LIBCAP_LIBDIR wasn't set), respect it. Otherwise fall back to any version
-    // as long as it's supported.
-    if let Ok(v) = env::var("LIBPCAP_VER") {
-        config.exactly_version(&v);
-    } else {
-        config.atleast_version(&Version::LOWEST_SUPPORTED.to_string());
-    };
-    config.probe("libpcap")
+        emit_cfg_flags(Version::max());
+    }
 }

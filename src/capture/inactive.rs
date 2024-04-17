@@ -6,7 +6,7 @@ use crate::{
     raw, Error,
 };
 
-#[cfg(libpcap_1_5_0)]
+#[cfg(libpcap_1_5)]
 use crate::capture::Precision;
 
 impl Capture<Inactive> {
@@ -52,7 +52,7 @@ impl Capture<Inactive> {
     }
 
     /// Set the time stamp type to be used by a capture device.
-    #[cfg(libpcap_1_2_1)]
+    #[cfg(libpcap_1_2)]
     pub fn tstamp_type(self, tstamp_type: TimestampType) -> Capture<Inactive> {
         unsafe { raw::pcap_set_tstamp_type(self.handle.as_ptr(), tstamp_type as _) };
         self
@@ -70,20 +70,20 @@ impl Capture<Inactive> {
     /// Immediate mode will be unset if `min_to_copy` is later called with a non-zero argument.
     /// Immediate mode is unset by resetting `min_to_copy` to the WinPcap default possibly changing
     /// a previously set value. When using `min_to_copy`, it is best to avoid `immediate_mode`.
-    #[cfg(any(libpcap_1_5_0, windows))]
+    #[cfg(any(libpcap_1_5, windows))]
     pub fn immediate_mode(self, to: bool) -> Capture<Inactive> {
         // Prior to 1.5.0 when `pcap_set_immediate_mode` was introduced, the necessary steps to set
         // immediate mode were more complicated, depended on the OS, and in some configurations had
         // to be set on an active capture. See
         // https://www.tcpdump.org/manpages/pcap_set_immediate_mode.3pcap.html. Since we do not
         // expect pre-1.5.0 version on unix systems in the wild, we simply ignore those cases.
-        #[cfg(libpcap_1_5_0)]
+        #[cfg(libpcap_1_5)]
         unsafe {
             raw::pcap_set_immediate_mode(self.handle.as_ptr(), to as _)
         };
 
         // In WinPcap we use `pcap_setmintocopy` as it does not have `pcap_set_immediate_mode`.
-        #[cfg(all(windows, not(libpcap_1_5_0)))]
+        #[cfg(all(windows, not(libpcap_1_5)))]
         unsafe {
             raw::pcap_setmintocopy(
                 self.handle.as_ptr(),
@@ -114,7 +114,7 @@ impl Capture<Inactive> {
     }
 
     /// Set the time stamp precision returned in captures.
-    #[cfg(libpcap_1_5_0)]
+    #[cfg(libpcap_1_5)]
     pub fn precision(self, precision: Precision) -> Capture<Inactive> {
         unsafe { raw::pcap_set_tstamp_precision(self.handle.as_ptr(), precision as _) };
         self
@@ -271,7 +271,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(libpcap_1_2_1)]
+    #[cfg(libpcap_1_2)]
     fn test_timstamp_type() {
         let _m = RAWMTX.lock();
 
@@ -311,15 +311,15 @@ mod tests {
         let _capture = capture.promisc(true);
     }
 
-    #[cfg(libpcap_1_5_0)]
+    #[cfg(libpcap_1_5)]
     struct ImmediateModeExpect(raw::__pcap_set_immediate_mode::Context);
 
-    #[cfg(all(windows, not(libpcap_1_5_0)))]
+    #[cfg(all(windows, not(libpcap_1_5)))]
     struct ImmediateModeExpect(raw::__pcap_setmintocopy::Context);
 
-    #[cfg(any(libpcap_1_5_0, windows))]
+    #[cfg(any(libpcap_1_5, windows))]
     fn immediate_mode_expect(pcap: *mut raw::pcap_t) -> ImmediateModeExpect {
-        #[cfg(libpcap_1_5_0)]
+        #[cfg(libpcap_1_5)]
         {
             let ctx = raw::pcap_set_immediate_mode_context();
             ctx.checkpoint();
@@ -328,7 +328,7 @@ mod tests {
                 .return_once(|_, _| 0);
             ImmediateModeExpect(ctx)
         }
-        #[cfg(all(windows, not(libpcap_1_5_0)))]
+        #[cfg(all(windows, not(libpcap_1_5)))]
         {
             let ctx = raw::pcap_setmintocopy_context();
             ctx.checkpoint();
@@ -340,7 +340,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(any(libpcap_1_5_0, windows))]
+    #[cfg(any(libpcap_1_5, windows))]
     fn test_immediate_mode() {
         let _m = RAWMTX.lock();
 
@@ -395,7 +395,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(libpcap_1_5_0)]
+    #[cfg(libpcap_1_5)]
     fn test_precision() {
         let _m = RAWMTX.lock();
 
