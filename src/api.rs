@@ -1760,23 +1760,20 @@ impl Api {
 #[cfg(windows)]
 fn add_system_npcap_paths() {
     use std::os::windows::ffi::{OsStrExt, OsStringExt};
-    use windows_sys::Win32::Foundation::{GetLastError, MAX_PATH};
+    use windows_sys::Win32::Foundation::MAX_PATH;
     use windows_sys::Win32::System::LibraryLoader::SetDllDirectoryW;
     use windows_sys::Win32::System::SystemInformation::GetSystemDirectoryW;
 
     unsafe {
         let mut buffer = [0u16; MAX_PATH as usize];
         let len = GetSystemDirectoryW(buffer.as_mut_ptr(), buffer.len() as u32);
-        println!("{:x}", GetLastError());
         let path = std::ffi::OsString::from_wide(&buffer[..len as usize]);
         let path = path.to_string_lossy();
         let npcap_path = format!("{}\\Npcap", path);
         let npcap_path = std::ffi::OsStr::new(&npcap_path);
-        println!("{:?}", npcap_path);
         let mut npcap_path = npcap_path.encode_wide().collect::<Vec<_>>();
         npcap_path.push(0);
         SetDllDirectoryW(npcap_path.as_ptr());
-        println!("{:x}", GetLastError());
     }
 }
 
