@@ -339,8 +339,8 @@ pub struct Api {
     pub create: ffi::PcapCreate,
     pub set_snaplen: ffi::PcapSetSnaplen,
     pub set_promisc: ffi::PcapSetPromisc,
-    pub can_set_rfmon: ffi::PcapCanSetRfmon,
-    pub set_rfmon: ffi::PcapSetRfmon,
+    pub can_set_rfmon: Option<ffi::PcapCanSetRfmon>,
+    pub set_rfmon: Option<ffi::PcapSetRfmon>,
     pub set_timeout: ffi::PcapSetTimeout,
     pub set_buffer_size: ffi::PcapSetBufferSize,
     pub activate: ffi::PcapActivate,
@@ -360,9 +360,9 @@ pub struct Api {
     pub setdirection: ffi::PcapSetdirection,
     pub getnonblock: ffi::PcapGetnonblock,
     pub setnonblock: ffi::PcapSetnonblock,
-    pub inject: ffi::PcapInject,
+    pub inject: Option<ffi::PcapInject>,
     pub sendpacket: ffi::PcapSendpacket,
-    pub statustostr: ffi::PcapStatustostr,
+    pub statustostr: Option<ffi::PcapStatustostr>,
     pub strerror: ffi::PcapStrerror,
     pub geterr: ffi::PcapGeterr,
     pub perror: ffi::PcapPerror,
@@ -370,7 +370,7 @@ pub struct Api {
     pub freecode: ffi::PcapFreecode,
     pub offline_filter: ffi::PcapOfflineFilter,
     pub datalink: ffi::PcapDatalink,
-    pub datalink_ext: ffi::PcapDatalinkExt,
+    pub datalink_ext: Option<ffi::PcapDatalinkExt>,
     pub list_datalinks: ffi::PcapListDatalinks,
     pub set_datalink: ffi::PcapSetDatalink,
     pub free_datalinks: ffi::PcapFreeDatalinks,
@@ -468,7 +468,7 @@ pub struct Api {
     pub datalink_val_to_description_or_dlt: ffi::PcapDatalinkValToDescriptionOrDlt,
 
     #[cfg(windows)]
-    pub dump_hopen: ffi::PcapDumpHopen,
+    pub dump_hopen: Option<ffi::PcapDumpHopen>,
     #[cfg(windows)]
     pub hopen_offline: ffi::PcapHopenOffline,
     #[cfg(all(windows, libpcap_1_5))]
@@ -531,14 +531,8 @@ impl Api {
                     .get(b"pcap_set_promisc")
                     .map(|f| *f)
                     .expect("pcap_set_promisc not loaded"),
-                can_set_rfmon: lib
-                    .get(b"pcap_can_set_rfmon")
-                    .map(|f| *f)
-                    .expect("pcap_can_set_rfmon not loaded"),
-                set_rfmon: lib
-                    .get(b"pcap_set_rfmon")
-                    .map(|f| *f)
-                    .expect("pcap_set_rfmon not loaded"),
+                can_set_rfmon: lib.get(b"pcap_can_set_rfmon").map(|f| *f).ok(),
+                set_rfmon: lib.get(b"pcap_set_rfmon").map(|f| *f).ok(),
                 set_timeout: lib
                     .get(b"pcap_set_timeout")
                     .map(|f| *f)
@@ -612,18 +606,12 @@ impl Api {
                     .get(b"pcap_setnonblock")
                     .map(|f| *f)
                     .expect("pcap_setnonblock not loaded"),
-                inject: lib
-                    .get(b"pcap_inject")
-                    .map(|f| *f)
-                    .expect("pcap_inject not loaded"),
+                inject: lib.get(b"pcap_inject").map(|f| *f).ok(),
                 sendpacket: lib
                     .get(b"pcap_sendpacket")
                     .map(|f| *f)
                     .expect("pcap_sendpacket not loaded"),
-                statustostr: lib
-                    .get(b"pcap_statustostr")
-                    .map(|f| *f)
-                    .expect("pcap_statustostr not loaded"),
+                statustostr: lib.get(b"pcap_statustostr").map(|f| *f).ok(),
                 strerror: lib
                     .get(b"pcap_strerror")
                     .map(|f| *f)
@@ -652,10 +640,7 @@ impl Api {
                     .get(b"pcap_datalink")
                     .map(|f| *f)
                     .expect("pcap_datalink not loaded"),
-                datalink_ext: lib
-                    .get(b"pcap_datalink_ext")
-                    .map(|f| *f)
-                    .expect("pcap_datalink_ext not loaded"),
+                datalink_ext: lib.get(b"pcap_datalink_ext").map(|f| *f).ok(),
                 list_datalinks: lib
                     .get(b"pcap_list_datalinks")
                     .map(|f| *f)
@@ -760,10 +745,7 @@ impl Api {
                     .expect("pcap_get_selectable_fd not loaded"),
 
                 #[cfg(libpcap_1_2)]
-                free_tstamp_types: lib
-                    .get(b"pcap_free_tstamp_types")
-                    .map(|f| *f)
-                    .expect("pcap_free_tstamp_types not loaded"),
+                free_tstamp_types: lib.get(b"pcap_free_tstamp_types").map(|f| *f).ok(),
                 #[cfg(libpcap_1_2)]
                 list_tstamp_types: lib
                     .get(b"pcap_list_tstamp_types")
@@ -921,10 +903,7 @@ impl Api {
                     .expect("pcap_datalink_val_to_description_or_dlt not loaded"),
 
                 #[cfg(windows)]
-                dump_hopen: lib
-                    .get(b"pcap_dump_hopen")
-                    .map(|f| *f)
-                    .expect("pcap_dump_hopen not loaded"),
+                dump_hopen: lib.get(b"pcap_dump_hopen").map(|f| *f).ok(),
                 #[cfg(windows)]
                 hopen_offline: lib
                     .get(b"pcap_hopen_offline")
@@ -1046,12 +1025,12 @@ impl Api {
 
     #[inline]
     pub unsafe fn can_set_rfmon(&self, arg1: *mut pcap_t) -> c_int {
-        (self.can_set_rfmon)(arg1)
+        self.can_set_rfmon.expect("pcap_can_set_rfmon not loaded")(arg1)
     }
 
     #[inline]
     pub unsafe fn set_rfmon(&self, arg1: *mut pcap_t, arg2: c_int) -> c_int {
-        (self.set_rfmon)(arg1, arg2)
+        self.set_rfmon.expect("pcap_set_rfmon not loaded")(arg1, arg2)
     }
 
     #[inline]
@@ -1171,7 +1150,7 @@ impl Api {
 
     #[inline]
     pub unsafe fn inject(&self, arg1: *mut pcap_t, arg2: *const c_void, arg3: size_t) -> c_int {
-        (self.inject)(arg1, arg2, arg3)
+        self.inject.expect("pcap_inject not loaded")(arg1, arg2, arg3)
     }
 
     #[inline]
@@ -1181,7 +1160,7 @@ impl Api {
 
     #[inline]
     pub unsafe fn statustostr(&self, arg1: c_int) -> *const c_char {
-        (self.statustostr)(arg1)
+        self.statustostr.expect("pcap_statustostr not loaded")(arg1)
     }
 
     #[inline]
@@ -1233,7 +1212,7 @@ impl Api {
 
     #[inline]
     pub unsafe fn datalink_ext(&self, arg1: *mut pcap_t) -> c_int {
-        (self.datalink_ext)(arg1)
+        self.datalink_ext.expect("pcap_datalink_ext not loaded")(arg1)
     }
 
     #[inline]
@@ -1365,7 +1344,8 @@ impl Api {
     #[cfg(libpcap_1_2)]
     #[inline]
     pub unsafe fn free_tstamp_types(&self, arg1: *mut c_int) {
-        (self.free_tstamp_types)(arg1)
+        self.free_tstamp_types
+            .expect("pcap_free_tstamp_types not loaded")(arg1)
     }
 
     #[cfg(libpcap_1_2)]
@@ -1636,7 +1616,7 @@ impl Api {
     #[cfg(windows)]
     #[inline]
     pub unsafe fn dump_hopen(&self, arg1: *mut pcap_t, arg2: intptr_t) -> *mut pcap_dumper_t {
-        (self.dump_hopen)(arg1, arg2)
+        self.dump_hopen.expect("pcap_dump_hopen not loaded")(arg1, arg2)
     }
 
     #[cfg(windows)]

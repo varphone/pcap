@@ -21,7 +21,7 @@ use crate::{
     capture::{Activated, Capture},
     codec::PacketCodec,
     linktype::Linktype,
-    packet::{Packet, PacketHeader},
+    packet::{Packet, PacketBoxed, PacketHeader},
     raw, Error,
 };
 
@@ -197,6 +197,42 @@ impl<T: Activated + ?Sized> Capture<T> {
         }
     }
 
+    pub fn next_packet_boxed(&mut self) -> Result<PacketBoxed, Error> {
+        unsafe {
+            let mut header: *mut raw::pcap_pkthdr = ptr::null_mut();
+            let mut packet: *const libc::c_uchar = ptr::null();
+            let retcode = raw::pcap_next_ex(self.handle.as_ptr(), &mut header, &mut packet);
+            match retcode {
+                i if i >= 1 => {
+                    // packet was read without issue
+                    Ok(PacketBoxed::new(
+                        header as *const raw::pcap_pkthdr as *const PacketHeader,
+                        packet,
+                    ))
+                }
+                0 => {
+                    // packets are being read from a live capture and the
+                    // timeout expired
+                    Err(Error::TimeoutExpired)
+                }
+                -1 => {
+                    // an error occured while reading the packet
+                    Err(self.get_err())
+                }
+                -2 => {
+                    // packets are being read from a "savefile" and there are no
+                    // more packets to read
+                    Err(Error::NoMorePackets)
+                }
+                // GRCOV_EXCL_START
+                _ => {
+                    // libpcap only defines codes >=1, 0, -1, and -2
+                    unreachable!()
+                } // GRCOV_EXCL_STOP
+            }
+        }
+    }
+
     /// Return an iterator that call [`Self::next_packet()`] forever. Require a [`PacketCodec`]
     pub fn iter<C: PacketCodec>(self, codec: C) -> PacketIter<T, C> {
         PacketIter::new(self, codec)
@@ -227,6 +263,39 @@ impl<T: Activated + ?Sized> Capture<T> {
                 cnt,
                 Handler::<F>::callback,
                 &mut handler as *mut Handler<AssertUnwindSafe<F>> as *mut u8,
+            )
+        };
+        if let Some(e) = handler.panic_payload {
+            resume_unwind(e);
+        }
+        self.check_err(return_code == 0)
+    }
+
+    pub fn for_each_boxed<F>(&mut self, count: Option<usize>, handler: F) -> Result<(), Error>
+    where
+        F: FnMut(PacketBoxed),
+    {
+        let cnt = match count {
+            // Actually passing 0 down to pcap_loop would mean read forever.
+            // We interpret it as "read nothing", so we just succeed immediately.
+            Some(0) => return Ok(()),
+            Some(cnt) => cnt
+                .try_into()
+                .expect("count of packets to read cannot exceed c_int::MAX"),
+            None => -1,
+        };
+
+        let mut handler = BoxedHandler {
+            func: AssertUnwindSafe(handler),
+            panic_payload: None,
+            handle: self.handle,
+        };
+        let return_code = unsafe {
+            raw::pcap_loop(
+                self.handle.as_ptr(),
+                cnt,
+                BoxedHandler::<F>::callback,
+                &mut handler as *mut BoxedHandler<AssertUnwindSafe<F>> as *mut u8,
             )
         };
         if let Some(e) = handler.panic_payload {
@@ -301,6 +370,38 @@ where
                 &*(header as *const PacketHeader),
                 slice::from_raw_parts(packet, (*header).caplen as _),
             );
+
+            let slf = slf as *mut Self;
+            let func = &mut (*slf).func;
+            let mut func = AssertUnwindSafe(func);
+            // If our handler function panics, we need to prevent it from unwinding across the
+            // FFI boundary. If the handler panics we catch the unwind here, break out of
+            // pcap_loop, and resume the unwind outside.
+            if let Err(e) = catch_unwind(move || func(packet)) {
+                (*slf).panic_payload = Some(e);
+                raw::pcap_breakloop((*slf).handle.as_ptr());
+            }
+        }
+    }
+}
+
+struct BoxedHandler<F> {
+    func: F,
+    panic_payload: Option<Box<dyn Any + Send>>,
+    handle: NonNull<raw::pcap_t>,
+}
+
+impl<F> BoxedHandler<F>
+where
+    F: FnMut(PacketBoxed),
+{
+    extern "C" fn callback(
+        slf: *mut libc::c_uchar,
+        header: *const raw::pcap_pkthdr,
+        packet: *const libc::c_uchar,
+    ) {
+        unsafe {
+            let packet = PacketBoxed::new(header as *const PacketHeader, packet);
 
             let slf = slf as *mut Self;
             let func = &mut (*slf).func;

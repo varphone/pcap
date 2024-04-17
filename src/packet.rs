@@ -1,3 +1,4 @@
+use std::ptr::NonNull;
 use std::{fmt, ops::Deref};
 
 /// Represents a packet returned from pcap.
@@ -59,6 +60,30 @@ impl PartialEq for PacketHeader {
 }
 
 impl Eq for PacketHeader {}
+
+#[derive(Copy, Clone, Debug)]
+pub struct PacketBoxed {
+    pub header: NonNull<PacketHeader>,
+    pub data: NonNull<u8>,
+}
+
+impl PacketBoxed {
+    pub fn new(header: *const PacketHeader, data: *const u8) -> PacketBoxed {
+        PacketBoxed {
+            header: NonNull::new(header as *mut PacketHeader).expect("header is null"),
+            data: NonNull::new(data as *mut u8).expect("data is null"),
+        }
+    }
+
+    pub fn as_packet<'r>(&self) -> Packet<'r> {
+        Packet::new(unsafe { self.header.as_ref() }, unsafe {
+            std::slice::from_raw_parts(self.data.as_ptr(), self.header.as_ref().caplen as usize)
+        })
+    }
+}
+
+unsafe impl Send for PacketBoxed {}
+unsafe impl Sync for PacketBoxed {}
 
 #[cfg(test)]
 mod tests {

@@ -93,6 +93,26 @@ fn add_system_npcap_paths() {
 }
 
 #[cfg(windows)]
+fn add_system_winpcap_paths() {
+    use std::os::windows::ffi::{OsStrExt, OsStringExt};
+    use windows_sys::Win32::Foundation::MAX_PATH;
+    use windows_sys::Win32::System::LibraryLoader::SetDllDirectoryW;
+    use windows_sys::Win32::System::SystemInformation::GetSystemDirectoryW;
+
+    unsafe {
+        let mut buffer = [0u16; MAX_PATH as usize];
+        let len = GetSystemDirectoryW(buffer.as_mut_ptr(), buffer.len() as u32);
+        let path = std::ffi::OsString::from_wide(&buffer[..len as usize]);
+        let path = path.to_string_lossy();
+        let winpcap_path = format!("{}", path);
+        let winpcap_path = std::ffi::OsStr::new(&winpcap_path);
+        let mut winpcap_path = winpcap_path.encode_wide().collect::<Vec<_>>();
+        winpcap_path.push(0);
+        SetDllDirectoryW(winpcap_path.as_ptr());
+    }
+}
+
+#[cfg(windows)]
 fn find_system_npcap() -> Result<PathBuf, Box<dyn std::error::Error>> {
     let windir = env::var("WINDIR")?;
     let npcap = PathBuf::from(windir).join("System32").join("Npcap");
@@ -101,7 +121,20 @@ fn find_system_npcap() -> Result<PathBuf, Box<dyn std::error::Error>> {
         add_system_npcap_paths();
         Ok(wpcap_dll)
     } else {
-        Err("npcap not found".into())
+        Err("wpcap not found".into())
+    }
+}
+
+#[cfg(windows)]
+fn find_system_winpcap() -> Result<PathBuf, Box<dyn std::error::Error>> {
+    let windir = env::var("WINDIR")?;
+    let npcap = PathBuf::from(windir).join("System32");
+    let wpcap_dll = npcap.join("wpcap.dll");
+    if wpcap_dll.exists() {
+        add_system_winpcap_paths();
+        Ok(wpcap_dll)
+    } else {
+        Err("wpcap not found".into())
     }
 }
 
@@ -111,7 +144,7 @@ fn get_libpcap_version(libdirpath: Option<PathBuf>) -> Result<Version, Box<dyn s
     #[cfg(target_os = "macos")]
     let mut libfile = PathBuf::from("libpcap.dylib");
     #[cfg(windows)]
-    let mut libfile = find_system_npcap()?;
+    let mut libfile = find_system_npcap().or(find_system_winpcap())?;
 
     if let Some(libdir) = libdirpath {
         libfile = libdir.join(libfile);
@@ -212,7 +245,7 @@ fn emit_cfg_flags(version: Version) {
         "required pcap lib version: >=1.0.0"
     );
 
-    println!("cargo:warning=libpcap version: {}", version);
+    // println!("cargo:warning=libpcap version: {}", version);
 
     for v in Version::list().iter().filter(|&v| v <= &version) {
         println!("cargo:rustc-cfg=libpcap_{}_{}", v.major, v.minor);
@@ -221,6 +254,7 @@ fn emit_cfg_flags(version: Version) {
 
 fn main() {
     if let Ok(version) = get_libpcap_version(None) {
+        println!("cargo:warning=libpcap version: {}", version);
         emit_cfg_flags(version);
     } else {
         emit_cfg_flags(Version::max());

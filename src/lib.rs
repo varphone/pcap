@@ -80,7 +80,7 @@ pub use capture::{
 pub use codec::PacketCodec;
 pub use device::{Address, ConnectionStatus, Device, DeviceFlags, IfFlags};
 pub use linktype::Linktype;
-pub use packet::{Packet, PacketHeader};
+pub use packet::{Packet, PacketBoxed, PacketHeader};
 
 #[deprecated(note = "Renamed to TimestampType")]
 /// An old name for `TimestampType`, kept around for backward-compatibility.
