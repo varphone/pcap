@@ -1,6 +1,8 @@
+#[cfg(libpcap_1_8)]
+use crate::raw::bpf_u_int;
 use crate::raw::{
-    bpf_insn, bpf_program, bpf_u_int32, pcap_direction_t, pcap_dumper_t, pcap_handler, pcap_if_t,
-    pcap_pkthdr, pcap_rmtauth, pcap_samp, pcap_send_queue, pcap_stat, pcap_t,
+    bpf_insn, bpf_program, pcap_direction_t, pcap_dumper_t, pcap_handler, pcap_if_t, pcap_pkthdr,
+    pcap_rmtauth, pcap_samp, pcap_send_queue, pcap_stat, pcap_t,
 };
 use libc::{
     c_char, c_int, c_uchar, c_uint, c_ushort, c_void, intptr_t, size_t, sockaddr, timeval, FILE,
@@ -226,7 +228,7 @@ pub mod ffi {
         arg4: *mut c_char,
     ) -> c_int;
 
-    #[cfg(all(linux, libpcap_1_9))]
+    #[cfg(all(unix, libpcap_1_9))]
     pub type PcapSetProtocolLinux = unsafe extern "C" fn(arg1: *mut pcap_t, arg2: c_int) -> c_int;
 
     #[cfg(libpcap_1_9)]
@@ -247,7 +249,8 @@ pub mod ffi {
     pub type PcapDatalinkValToDescriptionOrDlt = unsafe extern "C" fn(arg1: c_int) -> *const c_char;
 
     #[cfg(windows)]
-    pub type PcapDumpHopen = unsafe extern "C" fn(arg1: intptr_t) -> *mut pcap_dumper_t;
+    pub type PcapDumpHopen =
+        unsafe extern "C" fn(arg1: *mut pcap_t, arg2: intptr_t) -> *mut pcap_dumper_t;
     #[cfg(windows)]
     pub type PcapHopenOffline =
         unsafe extern "C" fn(arg1: intptr_t, arg2: *const c_char) -> *mut pcap_t;
@@ -382,7 +385,7 @@ pub struct Api {
     pub remoteact_close: ffi::PcapRemoteactClose,
     #[cfg(libpcap_1_9)]
     pub remoteact_list: ffi::PcapRemoteactList,
-    #[cfg(all(linux, libpcap_1_9))]
+    #[cfg(all(unix, libpcap_1_9))]
     pub set_protocol_linux: ffi::PcapSetProtocolLinux,
     #[cfg(libpcap_1_9)]
     pub setsampling: ffi::PcapSetsampling,
@@ -737,7 +740,7 @@ impl Api {
                     .get(b"pcap_remoteact_list")
                     .map(|f| *f)
                     .expect("pcap_remoteact_list not loaded"),
-                #[cfg(all(linux, libpcap_1_9))]
+                #[cfg(all(unix, libpcap_1_9))]
                 set_protocol_linux: lib
                     .get(b"pcap_set_protocol_linux")
                     .map(|f| *f)
@@ -1313,7 +1316,7 @@ impl Api {
         (self.remoteact_list)(arg1, arg2, arg3, arg4)
     }
 
-    #[cfg(all(linux, libpcap_1_9))]
+    #[cfg(all(unix, libpcap_1_9))]
     #[inline]
     pub unsafe fn set_protocol_linux(&self, arg1: *mut pcap_t, arg2: c_int) -> c_int {
         (self.set_protocol_linux)(arg1, arg2)
@@ -1348,8 +1351,8 @@ impl Api {
 
     #[cfg(windows)]
     #[inline]
-    pub unsafe fn dump_hopen(&self, arg1: intptr_t) -> *mut pcap_dumper_t {
-        (self.dump_hopen)(arg1)
+    pub unsafe fn dump_hopen(&self, arg1: *mut pcap_t, arg2: intptr_t) -> *mut pcap_dumper_t {
+        (self.dump_hopen)(arg1, arg2)
     }
 
     #[cfg(windows)]
