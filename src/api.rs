@@ -745,7 +745,10 @@ impl Api {
                     .expect("pcap_get_selectable_fd not loaded"),
 
                 #[cfg(libpcap_1_2)]
-                free_tstamp_types: lib.get(b"pcap_free_tstamp_types").map(|f| *f).ok(),
+                free_tstamp_types: lib
+                    .get(b"pcap_free_tstamp_types")
+                    .map(|f| *f)
+                    .expect("pcap_free_tstamp_types not loaded"),
                 #[cfg(libpcap_1_2)]
                 list_tstamp_types: lib
                     .get(b"pcap_list_tstamp_types")
@@ -1344,8 +1347,7 @@ impl Api {
     #[cfg(libpcap_1_2)]
     #[inline]
     pub unsafe fn free_tstamp_types(&self, arg1: *mut c_int) {
-        self.free_tstamp_types
-            .expect("pcap_free_tstamp_types not loaded")(arg1)
+        (self.free_tstamp_types)(arg1)
     }
 
     #[cfg(libpcap_1_2)]
