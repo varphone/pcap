@@ -21,7 +21,7 @@ use crate::{
     capture::{Activated, Capture},
     codec::PacketCodec,
     linktype::Linktype,
-    packet::{Packet, PacketBoxed, PacketHeader},
+    packet::{Packet, PacketHeader, UnsafedPacket},
     raw, Error,
 };
 
@@ -197,7 +197,26 @@ impl<T: Activated + ?Sized> Capture<T> {
         }
     }
 
-    pub fn next_packet_boxed(&mut self) -> Result<PacketBoxed, Error> {
+    /// Blocks until a packet is returned from the capture handle or an error occurs.
+    ///
+    /// pcap captures packets and places them into a buffer which this function reads
+    /// from.
+    ///
+    /// # Warning
+    ///
+    /// This buffer has a finite length, so if the buffer fills completely new
+    /// packets will be discarded temporarily. This means that in realtime situations,
+    /// you probably want to minimize the time between calls to next_packet_unsafed() method.
+    ///
+    /// # Safety
+    ///
+    /// This function is unsafe because it returns a `UnsafedPacket` with a reference to the packet header and data.
+    /// The caller must ensure that the `UnsafedPacket` is processed as soon as possible to avoid overwriting the packet data.
+    ///
+    /// To minimize the risk of data corruption, it's recommended to set
+    /// the buffer size large enough to accommodate the entire packet
+    /// during your process's period of operation.
+    pub fn next_packet_unsafed(&mut self) -> Result<UnsafedPacket, Error> {
         unsafe {
             let mut header: *mut raw::pcap_pkthdr = ptr::null_mut();
             let mut packet: *const libc::c_uchar = ptr::null();
@@ -205,7 +224,7 @@ impl<T: Activated + ?Sized> Capture<T> {
             match retcode {
                 i if i >= 1 => {
                     // packet was read without issue
-                    Ok(PacketBoxed::new(
+                    Ok(UnsafedPacket::new(
                         header as *const raw::pcap_pkthdr as *const PacketHeader,
                         packet,
                     ))
@@ -271,9 +290,9 @@ impl<T: Activated + ?Sized> Capture<T> {
         self.check_err(return_code == 0)
     }
 
-    pub fn for_each_boxed<F>(&mut self, count: Option<usize>, handler: F) -> Result<(), Error>
+    pub fn for_each_unsafed<F>(&mut self, count: Option<usize>, handler: F) -> Result<(), Error>
     where
-        F: FnMut(PacketBoxed),
+        F: FnMut(UnsafedPacket),
     {
         let cnt = match count {
             // Actually passing 0 down to pcap_loop would mean read forever.
@@ -285,7 +304,7 @@ impl<T: Activated + ?Sized> Capture<T> {
             None => -1,
         };
 
-        let mut handler = BoxedHandler {
+        let mut handler = UnsafedHandler {
             func: AssertUnwindSafe(handler),
             panic_payload: None,
             handle: self.handle,
@@ -294,8 +313,8 @@ impl<T: Activated + ?Sized> Capture<T> {
             raw::pcap_loop(
                 self.handle.as_ptr(),
                 cnt,
-                BoxedHandler::<F>::callback,
-                &mut handler as *mut BoxedHandler<AssertUnwindSafe<F>> as *mut u8,
+                UnsafedHandler::<F>::callback,
+                &mut handler as *mut UnsafedHandler<AssertUnwindSafe<F>> as *mut u8,
             )
         };
         if let Some(e) = handler.panic_payload {
@@ -385,15 +404,15 @@ where
     }
 }
 
-struct BoxedHandler<F> {
+struct UnsafedHandler<F> {
     func: F,
     panic_payload: Option<Box<dyn Any + Send>>,
     handle: NonNull<raw::pcap_t>,
 }
 
-impl<F> BoxedHandler<F>
+impl<F> UnsafedHandler<F>
 where
-    F: FnMut(PacketBoxed),
+    F: FnMut(UnsafedPacket),
 {
     extern "C" fn callback(
         slf: *mut libc::c_uchar,
@@ -401,7 +420,7 @@ where
         packet: *const libc::c_uchar,
     ) {
         unsafe {
-            let packet = PacketBoxed::new(header as *const PacketHeader, packet);
+            let packet = UnsafedPacket::new(header as *const PacketHeader, packet);
 
             let slf = slf as *mut Self;
             let func = &mut (*slf).func;

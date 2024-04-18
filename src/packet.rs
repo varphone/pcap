@@ -61,20 +61,30 @@ impl PartialEq for PacketHeader {
 
 impl Eq for PacketHeader {}
 
+/// Represents a packet returned from pcap.
+///
+/// This struct holds a raw pointer to the packet header and the packet data.
+/// You can cache this struct without copying the packet data.
+///
+/// Yyou must be careful to handle the lifetime of the packet data.
 #[derive(Copy, Clone, Debug)]
-pub struct PacketBoxed {
+pub struct UnsafedPacket {
+    /// The packet header provided by pcap, including the timeval, captured length, and packet
     pub header: NonNull<PacketHeader>,
+    /// The captured packet data
     pub data: NonNull<u8>,
 }
 
-impl PacketBoxed {
-    pub fn new(header: *const PacketHeader, data: *const u8) -> PacketBoxed {
-        PacketBoxed {
+impl UnsafedPacket {
+    /// Create a new `UnsafedPacket` from a raw pointer to the packet header and the packet data.
+    pub fn new(header: *const PacketHeader, data: *const u8) -> UnsafedPacket {
+        UnsafedPacket {
             header: NonNull::new(header as *mut PacketHeader).expect("header is null"),
             data: NonNull::new(data as *mut u8).expect("data is null"),
         }
     }
 
+    /// Convert the `UnsafedPacket` to a `Packet`.
     pub fn as_packet<'r>(&self) -> Packet<'r> {
         Packet::new(unsafe { self.header.as_ref() }, unsafe {
             std::slice::from_raw_parts(self.data.as_ptr(), self.header.as_ref().caplen as usize)
@@ -82,8 +92,8 @@ impl PacketBoxed {
     }
 }
 
-unsafe impl Send for PacketBoxed {}
-unsafe impl Sync for PacketBoxed {}
+unsafe impl Send for UnsafedPacket {}
+unsafe impl Sync for UnsafedPacket {}
 
 #[cfg(test)]
 mod tests {
